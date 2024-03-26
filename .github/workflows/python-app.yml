@@ -21,4 +21,4 @@ jobs:
         python -m pip install pandas
         # Add any other dependency installation commands here
     - name: Run the script
-      run: python main.py
+      run: python app.py
