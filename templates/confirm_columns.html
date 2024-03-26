@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Configure Columns</title>
+    <style>
+        /* Main Container */
+        .main-container {
+            display: flex;
+            justify-content: flex-start; /* Align items to the left */
+            width: 100%; /* Ensure it spans the full width of its parent */
+        }
+
+        /* Configuration and Preview Panels */
+        #configurationPanel {
+            flex: 0 0 58%; /* Adjusted to allow for spacing - prevents the panel from growing but allows it to shrink if necessary */
+            padding-right: 20px; /* Space between panels */
+        }
+
+        #previewPanel {
+            flex: 0 0 38%; /* Adjusted to fit next to the configuration panel with spacing */
+            padding-left: 20px; /* Ensures space between panels */
+        }
+
+        /* Draggable Items - No changes needed here, kept for consistency */
+        .draggable {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: move;
+            text-align: left;
+        }
+
+        .draggable.over {
+            border: 2px dashed #000;
+        }
+
+        .dragging {
+            opacity: 0.5;
+        }
+
+        #columnsList {
+            width: auto; /* Adjust to content width */
+            margin: 0; /* Adjusted margin */
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        /* Preview Content Styles - No changes needed here, kept for consistency */
+        #previewContent {
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #previewContent div {
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #previewContent strong {
+            font-weight: bold;
+        }
+
+        /* Reset float for subsequent content - May not be necessary with flex layout */
+        .clearfix::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+    </style>
+</head>
+    <body>
+        <h1>Configure Columns</h1>
+        <div class="main-container" style="display: flex; justify-content: flex-start; align-items: flex-start;">
+            <div id="configurationPanel" style="flex: 0 0 58%; margin-right: 20px;">
+                <form action="/configure" id="configureForm" method="post">
+                    <div id="columnsList">
+                        {% for column in columns %}
+                        <div class="draggable" data-column="{{ column }}" draggable="true">
+                            {{ column }}
+                            <select name="fontSize_{{ column }}">
+                                <option value="14" {% if font_sizes is not none and font_sizes.get(column) == "14" %}selected{% endif %}>14px</option>
+                                <option value="18" {% if font_sizes is none or font_sizes.get(column) == "18" or column not in font_size %}selected{% endif %}>18px</option>
+                                <option value="22" {% if font_sizes is not none and font_sizes.get(column) == "22" %}selected{% endif %}>22px</option>
+                                <option value="26" {% if font_sizes is not none and font_sizes.get(column) == "26" %}selected{% endif %}>26px</option>
+                                <option value="30" {% if font_sizes is not none and font_sizes.get(column) == "30" %}selected{% endif %}>30px</option>
+                                <option value="34" {% if font_sizes is not none and font_sizes.get(column) == "34" %}selected{% endif %}>34px</option>
+                                <option value="38" {% if font_sizes is not none and font_sizes.get(column) == "38" %}selected{% endif %}>38px</option>
+                                <!-- Add more sizes as needed -->
+                            </select>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <input type="text" name="configName" placeholder="Enter configuration name" required>
+                    <input type="submit" value="Configure">
+                    <input type="hidden" id="orderInput" name="order">
+                </form>
+            </div>
+            <div id="previewPanel" style="flex: 0 0 38%; padding-left: 20px;">
+                <h2>Profile Preview</h2>
+                <div id="previewContent"></div>
+            </div>
+        </div>
+        <h1>Upload Configuration</h1>
+        <form action="/upload-config" method="post" enctype="multipart/form-data">
+            <input type="file" name="configFile">
+            <input type="submit" value="Upload Configuration">
+        </form>
+
+        <script>
+            let dragSrcEl = null;
+
+            function handleDragStart(e) {
+                dragSrcEl = this;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', this.outerHTML);
+                this.classList.add('dragging');
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            }
+
+            function handleDragEnter(e) {
+                this.classList.add('over');
+            }
+
+            function handleDragLeave(e) {
+                this.classList.remove('over');
+            }
+
+            function handleDrop(e) {
+                e.stopPropagation(); // Stops the browser from redirecting.
+                e.preventDefault();
+                this.classList.remove('over');
+
+                if (dragSrcEl !== this) {
+                    // Find the target's position in the list
+                    const targetIndex = Array.from(this.parentNode.children).indexOf(this);
+                    const srcIndex = Array.from(dragSrcEl.parentNode.children).indexOf(dragSrcEl);
+
+                    if (targetIndex < srcIndex) {
+                        this.parentNode.insertBefore(dragSrcEl, this);
+                    } else {
+                        // Inserting after requires checking for a nextSibling due to how insertBefore works
+                        if (this.nextSibling) {
+                            this.parentNode.insertBefore(dragSrcEl, this.nextSibling);
+                        } else {
+                            // If there's no nextSibling, it means the element is the last child, so we just append it
+                            this.parentNode.appendChild(dragSrcEl);
+                        }
+                    }
+
+                    updateConfigurationAndPreview();
+                }
+            }
+
+            function handleDragEnd() {
+                [].forEach.call(document.querySelectorAll('.draggable'), function(item) {
+                    item.classList.remove('over', 'dragging');
+                });
+            }
+
+            function addDnDHandlers() {
+                const cols = document.querySelectorAll('.draggable');
+                cols.forEach(col => {
+                    col.setAttribute('draggable', 'true');
+                    col.addEventListener('dragstart', handleDragStart, false);
+                    col.addEventListener('dragenter', handleDragEnter, false);
+                    col.addEventListener('dragover', handleDragOver, false);
+                    col.addEventListener('dragleave', handleDragLeave, false);
+                    col.addEventListener('drop', handleDrop, false);
+                    col.addEventListener('dragend', handleDragEnd, false);
+                });
+            }
+
+            function addFontSizeChangeHandlers() {
+                document.querySelectorAll('#columnsList .draggable select').forEach(select => {
+                    select.addEventListener('change', updateConfigurationAndPreview);
+                });
+            }
+
+            function updateConfigurationAndPreview() {
+                const previewContent = document.getElementById('previewContent');
+                previewContent.innerHTML = '';
+
+                document.querySelectorAll('#columnsList .draggable').forEach(elem => {
+                    const columnName = elem.getAttribute('data-column').toUpperCase();
+                    let fontSize = elem.querySelector('select').value; // Fetch selected font size
+                    if (!fontSize) {
+                        fontSize = '16'; // Default to 16px if no selection is made
+                        elem.querySelector('select').value = fontSize; // Update the dropdown to reflect this default
+                    }
+                    const row = `<div style="font-size:${fontSize}px;"><strong>${columnName}:</strong> <span>VariableValue</span></div>`;
+                    previewContent.innerHTML += row;
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                addDnDHandlers();
+                addFontSizeChangeHandlers(); // Set up the font size change handlers
+                updateConfigurationAndPreview(); // Initial preview update
+            });
+
+            function updateOrderBeforeSubmit() {
+                const order = Array.from(document.querySelectorAll('#columnsList .draggable'))
+                                   .map(elem => elem.getAttribute('data-column'));
+                document.getElementById('orderInput').value = JSON.stringify(order);
+            }
+
+            document.getElementById('configureForm').addEventListener('submit', updateOrderBeforeSubmit);
+        </script>
+    </body>
+</html>
